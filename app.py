@@ -53,7 +53,7 @@ def buscar_modelo_activo():
         return None
 
 # 3. INTERFAZ PRINCIPAL
-st.title("🧠 Sancho: Psicología + Datos")
+st.title("🧠 Sancho")
 st.markdown("---")
 
 with st.sidebar:
