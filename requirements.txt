@@ -2,5 +2,5 @@ streamlit
 openai-whisper
 pydub
 pandas
-setuptools
-pyaudioop  <-- AGREGA ESTO
+pyaudioop
+xlsxwriter
