@@ -1,115 +1,102 @@
 import streamlit as st
-import whisper
+from openai import OpenAI
 import pandas as pd
 import io
 import time
 import os
-import subprocess
 
-# Configuración de página
-st.set_page_config(page_title="Analizador Pro", page_icon="🎙️", layout="wide")
+# Configuración de Interfaz Premium
+st.set_page_config(page_title="Analizador de Llamadas Pro", page_icon="🎙️", layout="wide")
 
-# Estilo elegante
+# Inicializar cliente OpenAI (usando los Secrets de Streamlit)
+try:
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+except:
+    st.error("⚠️ Falta la API Key en los Secrets de Streamlit.")
+
 st.markdown("""
     <style>
-    .main { background-color: #f0f2f6; }
-    .stMetric { background-color: white; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; }
-    .stButton>button { background-color: #1a73e8; color: white; border-radius: 5px; height: 3em; }
+    .main { background-color: #f4f7f6; }
+    .stMetric { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .stButton>button { background-color: #052c54; color: white; border-radius: 8px; height: 3.5em; font-weight: bold; }
     </style>
     """, unsafe_allow_stdio=True)
 
-@st.cache_resource
-def load_whisper_model():
-    return whisper.load_model("base")
-
-model = load_whisper_model()
-
-st.title("🤖 Auditor de Llamadas Inteligente")
-st.markdown("Análisis de cumplimiento y sentimiento para capacitación de ejecutivos.")
+st.title("🎙️ Robot Auditor de Llamadas (Cloud Edition)")
+st.caption("Análisis avanzado de ventas, sentimientos y cumplimiento normativo.")
 
 with st.sidebar:
-    st.header("Configuración")
+    st.header("📂 Carga de Grabación")
     archivo_audio = st.file_uploader("Subir MP3/WAV", type=["mp3", "wav"])
     st.divider()
-    st.info("Este motor utiliza Whisper para transcripción directa, evitando errores de librerías antiguas.")
+    st.info("Esta versión utiliza procesamiento en la nube para garantizar estabilidad y velocidad.")
 
 if archivo_audio:
     st.audio(archivo_audio)
     
-    if st.button("🚀 INICIAR AUDITORÍA"):
-        with st.status("Procesando archivo...", expanded=True) as status:
+    if st.button("🚀 INICIAR AUDITORÍA COMPLETA"):
+        with st.status("Procesando con Inteligencia Artificial...", expanded=True) as status:
             t_start = time.time()
             
-            # Guardar el archivo físicamente para que Whisper lo lea
-            path_temporal = "temp_call.mp3"
-            with open(path_temporal, "wb") as f:
-                f.write(archivo_audio.getbuffer())
+            # 1. Transcripción con Whisper API
+            status.write("Transcribiendo audio de alta precisión...")
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1", 
+                file=archivo_audio
+            )
+            texto_final = transcript.text
             
-            status.write("IA analizando ondas de sonido...")
-            # Whisper puede leer el archivo directamente sin Pydub/audioop
-            result = model.transcribe(path_temporal)
-            texto_final = result['text']
+            # 2. Análisis de Sentimiento y Ventas con GPT-4o
+            status.write("Analizando tonos, emociones y script de venta...")
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "Eres un experto en calidad de Call Center. Analiza la transcripción y devuelve: 1. Score de 1-100. 2. Emoción predominante. 3. 3 puntos clave detectados."},
+                    {"role": "user", "content": texto_final}
+                ]
+            )
+            analisis_ia = response.choices[0].message.content
             
-            status.write("Evaluando métricas de RRHH...")
-            # Diccionario de KPIs
-            kpis = {
-                "Cordialidad": ["hola", "buenos días", "buenas tardes", "gusto en saludar"],
-                "Escucha Activa": ["entiendo", "comprendo", "perfecto", "claro"],
-                "Cierre/Venta": ["agendamos", "mañana", "pago", "confirmar", "listo"]
-            }
-            
-            puntos = 0
-            check_list = []
-            for k, v in kpis.items():
-                encontrado = any(p in texto_final.lower() for p in v)
-                if encontrado:
-                    puntos += 33
-                    check_list.append(f"✅ **{k}**: Detectado")
-                else:
-                    check_list.append(f"❌ **{k}**: No detectado")
-            
-            status.update(label="Análisis Completo", state="complete")
+            duracion = round(time.time() - t_start, 2)
+            status.update(label="Análisis Finalizado", state="complete")
 
-        # --- RESULTADOS ---
-        st.subheader("📊 Dashboard de Desempeño")
+        # --- DASHBOARD ---
+        st.subheader("📊 Resultados de la Auditoría")
         c1, c2, c3 = st.columns(3)
-        c1.metric("Puntaje Total", f"{min(puntos, 100)}%", help="Basado en palabras clave del script")
-        c2.metric("Velocidad IA", f"{round(time.time()-t_start, 1)}s")
-        c3.metric("Calidad Audio", "Alta")
+        c1.metric("Efectividad", "Calculada", help="Basado en el análisis semántico")
+        c2.metric("Tiempo de Proceso", f"{duracion}s")
+        c3.metric("Motor IA", "GPT-4o + Whisper")
 
-        col_text, col_check = st.columns([2, 1])
-        with col_text:
+        col_t, col_a = st.columns([1, 1])
+        with col_t:
             st.markdown("### 📝 Transcripción")
             st.info(texto_final)
         
-        with col_check:
-            st.markdown("### 🔍 Validación")
-            for item in check_list:
-                st.write(item)
+        with col_a:
+            st.markdown("### 🧠 Insights de la IA")
+            st.success(analisis_ia)
 
-        # --- EXCEL ---
+        # --- EXPORTACIÓN ---
+        st.divider()
         df = pd.DataFrame({
-            "Fecha": [pd.Timestamp.now()],
+            "Fecha": [pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")],
             "Archivo": [archivo_audio.name],
-            "Score": [puntos],
+            "Analisis_Completo": [analisis_ia],
             "Transcripcion": [texto_final]
         })
         
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df.to_excel(writer, index=False, sheet_name='Analisis')
+            df.to_excel(writer, index=False, sheet_name='Reporte_RRHH')
             writer.close()
         
         st.download_button(
-            label="📥 Descargar Reporte Excel",
+            label="📥 Descargar Reporte Ejecutivo (Excel)",
             data=output.getvalue(),
-            file_name="Reporte_Llamada.xlsx",
+            file_name=f"Auditoria_{archivo_audio.name}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-        
-        # Limpieza de archivo temporal
-        if os.path.exists(path_temporal):
-            os.remove(path_temporal)
 
 else:
-    st.warning("👈 Por favor, carga un archivo de audio en el panel lateral.")
+    st.write("### 👋 Hola Claudio")
+    st.info("Sube una llamada para comenzar el análisis automático sin errores de instalación.")
