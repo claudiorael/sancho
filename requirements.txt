@@ -3,3 +3,4 @@ openai-whisper
 pydub
 pandas
 setuptools
+pyaudioop  <-- AGREGA ESTO
