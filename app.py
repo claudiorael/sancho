@@ -13,7 +13,7 @@ if "GEMINI_API_KEY" in st.secrets:
 else:
     st.error("Por favor, agrega la GEMINI_API_KEY en los Secrets de Streamlit.")
 
-st.title("🤖 Robot Analista de RRHH (Power by Gemini)")
+st.title("🤖 Robot Analista (Power by Gemini)")
 st.caption("Sistema avanzado de auditoría de ventas y calidad de llamadas.")
 
 # --- SIDEBAR ---
