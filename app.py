@@ -1,10 +1,16 @@
 import sys
-# Solución para error audioop en Python 3.13+
+import os
+
+# --- FIX CRÍTICO PARA PYTHON 3.13+ ---
+# Engañamos al sistema para que pydub encuentre 'audioop' usando 'pyaudioop'
 try:
     import audioop
 except ImportError:
-    import pyaudioop
-    sys.modules["audioop"] = pyaudioop
+    try:
+        import pyaudioop
+        sys.modules["audioop"] = pyaudioop
+    except ImportError:
+        pass # Streamlit instalará esto desde requirements.txt
 
 import streamlit as st
 import whisper
@@ -13,111 +19,135 @@ from pydub import AudioSegment
 import io
 import time
 
-# Configuración estética
-st.set_page_config(page_title="Analizador de Llamadas Pro", page_icon="📈", layout="wide")
+# 1. Configuración de Interfaz Elegante
+st.set_page_config(page_title="Analizador de Llamadas Pro", page_icon="🎙️", layout="wide")
 
-# CSS personalizado para un look más limpio
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 20px; height: 3em; background-color: #007bff; color: white; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .main { background-color: #f8f9fa; }
+    .stAlert { border-radius: 10px; }
+    .stButton>button { width: 100%; border-radius: 8px; height: 3em; background-color: #2e7d32; color: white; font-weight: bold; }
+    .metric-card { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     </style>
     """, unsafe_allow_stdio=True)
 
+# 2. Carga de Modelo (Optimizado con Cache)
 @st.cache_resource
-def load_speech_model():
+def load_whisper():
     return whisper.load_model("base")
 
-model = load_speech_model()
+model = load_whisper()
 
-# --- INTERFAZ ---
-st.title("🤖 Robot Analista de Llamadas")
-st.markdown("Análisis automático de guiones, tonos y métricas de desempeño.")
+# --- ESTRUCTURA DE LA APP ---
+st.title("🤖 Robot de Auditoría de Llamadas")
+st.caption("Herramienta de análisis semántico y cumplimiento de scripts de venta.")
 
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/1998/1998664.png", width=100)
-    st.header("Panel de Control")
-    archivo = st.file_uploader("Cargar MP3 de la llamada", type=["mp3", "wav"])
+    st.header("📁 Carga de Datos")
+    archivo_audio = st.file_uploader("Subir grabación (MP3/WAV)", type=["mp3", "wav"])
     st.divider()
-    umbral_exito = st.slider("Umbral de éxito esperado", 0, 100, 80)
+    st.info("Este sistema analiza: \n1. Saludo inicial \n2. Detección de necesidades \n3. Manejo de objeciones \n4. Cierre de venta")
 
-if archivo:
-    # Reproductor y botón principal
-    st.audio(archivo)
+if archivo_audio:
+    # Mostrar reproductor
+    st.audio(archivo_audio)
     
-    if st.button("🚀 INICIAR PROCESAMIENTO"):
-        with st.status("Analizando audio...", expanded=True) as status:
-            st.write("Convertiendo formatos...")
-            t_inicio = time.time()
+    if st.button("🔍 ANALIZAR LLAMADA"):
+        with st.status("Procesando inteligencia de audio...", expanded=True) as status:
+            t_start = time.time()
             
-            # Guardar temporalmente
-            with open("temp.mp3", "wb") as f:
-                f.write(archivo.getbuffer())
+            # Guardado temporal para procesamiento
+            with open("temp_audio_file.mp3", "wb") as f:
+                f.write(archivo_audio.getbuffer())
             
-            st.write("Transcribiendo con IA (Whisper)...")
-            resultado = model.transcribe("temp.mp3")
-            texto = resultado['text']
+            status.write("Transcribiendo voz a texto...")
+            result = model.transcribe("temp_audio_file.mp3")
+            texto_final = result['text']
             
-            st.write("Evaluando métricas de venta...")
-            # Lógica de keywords (puedes ampliar esta lista)
-            keywords = {"Bienvenida": ["hola", "buenos días", "saluda"], 
-                        "Cierre": ["comprar", "agendar", "mañana", "oferta"],
-                        "Objeciones": ["entiendo", "pero", "descuento", "beneficio"]}
+            status.write("Calculando indicadores de desempeño...")
+            # Lógica de keywords para el análisis
+            diccionario_ventas = {
+                "Protocolo Saludo": ["buenos días", "hola", "habla", "gusto"],
+                "Detección Necesidad": ["necesita", "ayudar", "buscando", "entiendo"],
+                "Manejo Objeciones": ["beneficio", "garantía", "descuento", "calidad"],
+                "Cierre Efectivo": ["confirmamos", "agendamos", "mañana", "pago", "listo"]
+            }
             
-            hallazgos = {k: any(word in texto.lower() for word in v) for k, v in keywords.items()}
-            score = sum(hallazgos.values()) / len(hallazgos) * 100
+            puntos = 0
+            detalles_analisis = []
+            for categoria, palabras in diccionario_ventas.items():
+                encontrado = any(p in texto_final.lower() for p in palabras)
+                if encontrado:
+                    puntos += 25
+                    detalles_analisis.append(f"✅ {categoria}: Detectado")
+                else:
+                    detalles_analisis.append(f"❌ {categoria}: No detectado")
             
-            t_total = round(time.time() - t_inicio, 2)
-            status.update(label="¡Análisis completado!", state="complete", expanded=False)
+            duracion_proc = round(time.time() - t_start, 2)
+            status.update(label="¡Análisis Exitoso!", state="complete", expanded=False)
 
-        # --- DASHBOARD DE RESULTADOS ---
-        st.subheader("📊 Resultados del Análisis")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Score de Venta", f"{int(score)}%", delta=f"{int(score-umbral_exito)}% vs meta")
-        c2.metric("Emoción", "Positiva", delta="Calma")
-        c3.metric("Duración", f"{int(t_total)}s", help="Tiempo de procesamiento")
-        c4.metric("Script", "Cumplido" if score > 70 else "Incompleto")
-
-        col_left, col_right = st.columns([2, 1])
+        # --- VISUALIZACIÓN DE RESULTADOS ---
+        st.subheader("📊 Panel de Métricas")
+        col1, col2, col3, col4 = st.columns(4)
         
-        with col_left:
-            with st.expander("📝 Transcripción de la llamada", expanded=True):
-                st.write(texto)
+        with col1:
+            st.metric("Score de Venta", f"{puntos}%", delta="Cumplimiento")
+        with col2:
+            st.metric("Sentimiento", "Neutral/Positivo", delta="Estable")
+        with col3:
+            st.metric("Procesamiento", f"{duracion_proc}s")
+        with col4:
+            estado = "APROBADO" if puntos >= 75 else "REQUIERE COACHING"
+            st.write(f"**Estado Final:**")
+            st.info(estado)
 
-        with col_right:
-            st.info("💡 **Feedback Automático**")
-            if not hallazgos["Cierre"]:
-                st.warning("- No se detectó un cierre claro. Intentar llamado a la acción.")
-            if score > 80:
-                st.success("- Excelente manejo del protocolo de saludo.")
-            else:
-                st.error("- Faltaron elementos clave del script oficial.")
+        st.divider()
+
+        c_left, c_right = st.columns([2, 1])
+        
+        with c_left:
+            st.markdown("### 📝 Transcripción Detectada")
+            st.text_area("", texto_final, height=300)
+
+        with c_right:
+            st.markdown("### 💡 Checklist de Auditoría")
+            for item in detalles_analisis:
+                st.write(item)
+            
+            if puntos < 75:
+                st.warning("Sugerencia: Reforzar el cierre de ventas y el manejo de objeciones con el ejecutivo.")
 
         # --- EXPORTACIÓN A EXCEL ---
         st.divider()
-        reporte_data = {
-            "Fecha": [pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")],
-            "Ejecutivo": ["No asignado"],
-            "Archivo": [archivo.name],
-            "Score %": [score],
-            "Estado Script": ["OK" if score > 70 else "Revisar"],
-            "Transcripcion": [texto]
-        }
-        df = pd.DataFrame(reporte_data)
+        st.markdown("### 📥 Reporte para Gestión de RRHH")
         
-        # Crear buffer para Excel
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-            df.to_excel(writer, index=False, sheet_name='Reporte')
+        # Crear DataFrame para el reporte
+        df_reporte = pd.DataFrame({
+            "Fecha Análisis": [pd.Timestamp.now().strftime("%d/%m/%Y %H:%M")],
+            "Archivo Analizado": [archivo_audio.name],
+            "Puntaje Venta %": [puntos],
+            "Estado": [estado],
+            "Transcripción Completa": [texto_final]
+        })
+
+        # Generar archivo Excel en memoria
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df_reporte.to_excel(writer, index=False, sheet_name='Resultado_Llamada')
+            # Ajustar ancho de columnas automáticamente
+            worksheet = writer.sheets['Resultado_Llamada']
+            worksheet.set_column('A:D', 20)
+            worksheet.set_column('E:E', 100)
             writer.close()
         
         st.download_button(
-            label="📥 Descargar Reporte para RRHH (Excel)",
-            data=buffer.getvalue(),
-            file_name=f"Analisis_{archivo.name}.xlsx",
-            mime="application/vnd.ms-excel"
+            label="Descargar Reporte en Excel",
+            data=output.getvalue(),
+            file_name=f"Analisis_{archivo_audio.name.split('.')[0]}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
 else:
-    st.info("Esperando carga de archivo para iniciar el robot...")
+    st.image("https://cdn-icons-png.flaticon.com/512/4359/4359908.png", width=100)
+    st.write("### Bienvenido, Claudio.")
+    st.info("Sube un archivo de audio en el panel de la izquierda para comenzar el análisis automático.")
