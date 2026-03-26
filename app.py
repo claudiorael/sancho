@@ -14,8 +14,8 @@ if "GEMINI_API_KEY" in st.secrets:
 else:
     st.error("Error: Configura la GEMINI_API_KEY en los Secrets de Streamlit.")
 
-st.title("🤖 Robot Analista (Powered by Gemini 1.5 Pro)")
-st.caption("Auditoría inteligente de llamadas y calidad de servicio.")
+st.title("🤖 Robot Analista (Multimodal)")
+st.caption("Auditoría inteligente de llamadas utilizando Google Gemini 1.5.")
 
 with st.sidebar:
     st.header("📂 Carga de Grabación")
@@ -43,21 +43,32 @@ if archivo:
                 
                 status.write("Analizando semántica y tonos...")
                 
-                # USAMOS EL MODELO CORRECTO (Pro 1.5 Latest)
-                model = genai.GenerativeModel(model_name="models/gemini-1.5-pro-latest")
+                # LÓGICA DE SELECCIÓN DE MODELO (Fallback)
+                modelos_a_probar = ["gemini-1.5-pro-latest", "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-1.5-flash"]
                 
+                response = None
                 prompt = """
                 Analiza esta llamada de Call Center de forma profesional:
                 1. Transcripción detallada.
                 2. Score de Calidad (1-100).
                 3. Detección de Emociones (Vendedor vs Cliente).
-                4. Identificación de puntos de dolor o conflicto.
+                4. Identificación de puntos de cumplimiento del script.
                 5. 3 recomendaciones accionables para mejora de ventas.
                 """
+
+                for nombre_modelo in modelos_a_probar:
+                    try:
+                        model = genai.GenerativeModel(model_name=f"models/{nombre_modelo}")
+                        response = model.generate_content([prompt, audio_file])
+                        if response:
+                            break
+                    except Exception:
+                        continue
                 
-                response = model.generate_content([prompt, audio_file])
+                if not response:
+                    raise Exception("No se pudo conectar con ninguno de los modelos de Gemini. Revisa los permisos de tu API Key.")
+
                 resultado_ia = response.text
-                
                 status.update(label="¡Análisis Exitoso!", state="complete")
 
             # --- VISUALIZACIÓN ---
@@ -80,18 +91,17 @@ if archivo:
             st.download_button(
                 label="📥 Descargar Reporte Excel",
                 data=output.getvalue(),
-                file_name=f"Auditoria_{archivo.name}.xlsx",
+                file_name=f"Auditoria_{archivo_audio.name if 'archivo_audio' in locals() else 'Llamada'}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
             
-            # Limpieza
+            # Limpieza obligatoria
             genai.delete_file(audio_file.name)
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
         except Exception as e:
             st.error(f"Error detectado: {e}")
-            st.info("Tip: Intenta cambiar el nombre del modelo a 'gemini-1.5-flash' si el error 404 persiste, ya que es más liviano.")
 
 else:
     st.write("### 👋 Hola Claudio")
