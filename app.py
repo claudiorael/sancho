@@ -1,102 +1,103 @@
 import streamlit as st
-from openai import OpenAI
+import google.generativeai as genai
 import pandas as pd
 import io
 import time
-import os
 
-# Configuración de Interfaz Premium
-st.set_page_config(page_title="Analizador de Llamadas Pro", page_icon="🎙️", layout="wide")
+# 1. Configuración de Interfaz
+st.set_page_config(page_title="Analizador de Llamadas Pro", page_icon="📈", layout="wide")
 
-# Inicializar cliente OpenAI (usando los Secrets de Streamlit)
-try:
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-except:
-    st.error("⚠️ Falta la API Key en los Secrets de Streamlit.")
+# Inicializar Gemini con tu suscripción
+if "GEMINI_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+else:
+    st.error("Por favor, agrega la GEMINI_API_KEY en los Secrets de Streamlit.")
 
-st.markdown("""
-    <style>
-    .main { background-color: #f4f7f6; }
-    .stMetric { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    .stButton>button { background-color: #052c54; color: white; border-radius: 8px; height: 3.5em; font-weight: bold; }
-    </style>
-    """, unsafe_allow_stdio=True)
+st.title("🤖 Robot Analista de RRHH (Power by Gemini)")
+st.caption("Sistema avanzado de auditoría de ventas y calidad de llamadas.")
 
-st.title("🎙️ Robot Auditor de Llamadas (Cloud Edition)")
-st.caption("Análisis avanzado de ventas, sentimientos y cumplimiento normativo.")
-
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("📂 Carga de Grabación")
-    archivo_audio = st.file_uploader("Subir MP3/WAV", type=["mp3", "wav"])
+    archivo = st.file_uploader("Subir MP3 o WAV", type=["mp3", "wav"])
     st.divider()
-    st.info("Esta versión utiliza procesamiento en la nube para garantizar estabilidad y velocidad.")
+    st.info("Al usar Gemini Pro, el análisis incluye: detección de emociones, cumplimiento de guion y sugerencias de coaching.")
 
-if archivo_audio:
-    st.audio(archivo_audio)
+# --- PROCESO ---
+if archivo:
+    st.audio(archivo)
     
-    if st.button("🚀 INICIAR AUDITORÍA COMPLETA"):
-        with st.status("Procesando con Inteligencia Artificial...", expanded=True) as status:
-            t_start = time.time()
+    if st.button("🚀 INICIAR AUDITORÍA"):
+        try:
+            with st.status("Analizando llamada con IA de alta resolución...", expanded=True) as status:
+                t_start = time.time()
+                
+                # Subir audio a Gemini (soporta archivos largos)
+                status.write("Subiendo audio al motor de procesamiento...")
+                # Guardamos temporalmente para que Gemini lo lea
+                with open("temp_audio.mp3", "wb") as f:
+                    f.write(archivo.getbuffer())
+                
+                audio_file = genai.upload_file(path="temp_audio.mp3")
+                
+                # Esperar a que el archivo se procese en la nube
+                while audio_file.state.name == "PROCESSING":
+                    time.sleep(2)
+                    audio_file = genai.get_file(audio_file.name)
+
+                status.write("Generando transcripción y métricas...")
+                model = genai.GenerativeModel(model_name="gemini-1.5-pro")
+                
+                # El Prompt maestro para tu análisis
+                prompt = """
+                Actúa como un experto en Auditoría de Call Center. Analiza este audio y entrega:
+                1. Transcripción resumida de la llamada.
+                2. Score de Venta (1-100) basado en el entusiasmo y claridad.
+                3. Análisis de Emociones: ¿Cómo se siente el cliente y el vendedor?
+                4. Checklist de cumplimiento: ¿Saludó? ¿Detectó necesidades? ¿Cerró la venta?
+                5. 3 consejos específicos para el plan de capacitación (RRHH).
+                """
+                
+                response = model.generate_content([prompt, audio_file])
+                resultado_ia = response.text
+                duracion = round(time.time() - t_start, 2)
+                
+                status.update(label="¡Análisis Finalizado!", state="complete")
+
+            # --- DASHBOARD ---
+            st.subheader("📊 Resultados de la Auditoría")
             
-            # 1. Transcripción con Whisper API
-            status.write("Transcribiendo audio de alta precisión...")
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1", 
-                file=archivo_audio
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Tiempo de Auditoría", f"{duracion}s")
+            c2.metric("Motor", "Gemini 1.5 Pro")
+            c3.metric("Estado", "Finalizado")
+
+            st.markdown("### 🧠 Informe Detallado de la IA")
+            st.info(resultado_ia)
+
+            # --- EXPORTACIÓN A EXCEL ---
+            st.divider()
+            df = pd.DataFrame({
+                "Fecha": [pd.Timestamp.now().strftime("%d/%m/%Y %H:%M")],
+                "Archivo": [archivo.name],
+                "Resultado_Analisis": [resultado_ia]
+            })
+            
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='Reporte_Calidad')
+                writer.close()
+            
+            st.download_button(
+                label="📥 Descargar Reporte para RRHH (Excel)",
+                data=output.getvalue(),
+                file_name=f"Reporte_Llamada_{archivo.name}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            texto_final = transcript.text
-            
-            # 2. Análisis de Sentimiento y Ventas con GPT-4o
-            status.write("Analizando tonos, emociones y script de venta...")
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "Eres un experto en calidad de Call Center. Analiza la transcripción y devuelve: 1. Score de 1-100. 2. Emoción predominante. 3. 3 puntos clave detectados."},
-                    {"role": "user", "content": texto_final}
-                ]
-            )
-            analisis_ia = response.choices[0].message.content
-            
-            duracion = round(time.time() - t_start, 2)
-            status.update(label="Análisis Finalizado", state="complete")
 
-        # --- DASHBOARD ---
-        st.subheader("📊 Resultados de la Auditoría")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Efectividad", "Calculada", help="Basado en el análisis semántico")
-        c2.metric("Tiempo de Proceso", f"{duracion}s")
-        c3.metric("Motor IA", "GPT-4o + Whisper")
-
-        col_t, col_a = st.columns([1, 1])
-        with col_t:
-            st.markdown("### 📝 Transcripción")
-            st.info(texto_final)
-        
-        with col_a:
-            st.markdown("### 🧠 Insights de la IA")
-            st.success(analisis_ia)
-
-        # --- EXPORTACIÓN ---
-        st.divider()
-        df = pd.DataFrame({
-            "Fecha": [pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")],
-            "Archivo": [archivo_audio.name],
-            "Analisis_Completo": [analisis_ia],
-            "Transcripcion": [texto_final]
-        })
-        
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df.to_excel(writer, index=False, sheet_name='Reporte_RRHH')
-            writer.close()
-        
-        st.download_button(
-            label="📥 Descargar Reporte Ejecutivo (Excel)",
-            data=output.getvalue(),
-            file_name=f"Auditoria_{archivo_audio.name}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        except Exception as e:
+            st.error(f"Error en el proceso: {e}")
 
 else:
-    st.write("### 👋 Hola Claudio")
-    st.info("Sube una llamada para comenzar el análisis automático sin errores de instalación.")
+    st.write("### Bienvenido, Claudio.")
+    st.warning("👈 Por favor, carga una llamada en el panel lateral para comenzar.")
