@@ -41,7 +41,7 @@ else:
     st.stop()
 
 def buscar_modelo_activo():
-    """Detecta dinámicamente el modelo para evitar el error 404."""
+    """Detecta dinámicamente el modelo para evitar el error 404 y captura errores reales."""
     try:
         modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         for m in modelos:
@@ -49,7 +49,9 @@ def buscar_modelo_activo():
         for m in modelos:
             if "1.5-pro" in m: return m
         return modelos[0] if modelos else None
-    except:
+    except Exception as e:
+        # Esto mostrará el error real en la interfaz en lugar de ocultarlo
+        st.error(f"Error interno al conectar con Gemini: {e}")
         return None
 
 # 3. INTERFAZ PRINCIPAL
@@ -62,9 +64,12 @@ with st.sidebar:
     
     st.divider()
     if st.button("🗑️ Limpiar Nube"):
-        for f in genai.list_files():
-            genai.delete_file(f.name)
-        st.success("Archivos eliminados de la nube.")
+        try:
+            for f in genai.list_files():
+                genai.delete_file(f.name)
+            st.success("Archivos eliminados de la nube.")
+        except Exception as e:
+            st.error(f"Error al limpiar la nube: {e}")
 
 if archivo:
     st.audio(archivo)
@@ -75,7 +80,7 @@ if archivo:
                 # Detectar Motor
                 nombre_modelo = buscar_modelo_activo()
                 if not nombre_modelo:
-                    st.error("No se detectaron modelos activos.")
+                    st.error("No se detectaron modelos activos. Revisa el error de conexión arriba.")
                     st.stop()
                 
                 status.write(f"Motor activo: {nombre_modelo}")
@@ -90,6 +95,10 @@ if archivo:
                 while audio_file.state.name == "PROCESSING":
                     time.sleep(2)
                     audio_file = genai.get_file(audio_file.name)
+                
+                if audio_file.state.name == "FAILED":
+                    st.error("El procesamiento del audio falló en los servidores de Google.")
+                    st.stop()
                 
                 # Análisis con enfoque mixto (Psicología + Eficiencia)
                 status.write("Generando análisis semántico y métricas...")
@@ -122,7 +131,6 @@ if archivo:
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df.to_excel(writer, index=False)
-                writer.close()
             
             st.download_button(
                 label="📥 Descargar Reporte en Excel",
@@ -138,5 +146,8 @@ if archivo:
 
         except Exception as e:
             st.error(f"Error en el proceso: {e}")
+            # Intento de limpieza en caso de error
+            if os.path.exists("temp_audit.mp3"):
+                os.remove("temp_audit.mp3")
 else:
     st.info("Sube una llamada para empezar el cruce de datos y psicología.")
