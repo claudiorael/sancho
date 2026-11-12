@@ -50,7 +50,6 @@ def buscar_modelo_activo():
             if "1.5-pro" in m: return m
         return modelos[0] if modelos else None
     except Exception as e:
-        # Esto mostrará el error real en la interfaz en lugar de ocultarlo
         st.error(f"Error interno al conectar con Gemini: {e}")
         return None
 
@@ -60,7 +59,6 @@ st.markdown("---")
 
 with st.sidebar:
     st.header("📂 Carga de Evidencia")
-    # MODIFICACIÓN 1: Se agregó "mp4" a los tipos permitidos
     archivo = st.file_uploader("Subir grabación de llamada (MP3/WAV/MP4)", type=["mp3", "wav", "mp4"])
     
     st.divider()
@@ -73,15 +71,14 @@ with st.sidebar:
             st.error(f"Error al limpiar la nube: {e}")
 
 if archivo:
-    # MODIFICACIÓN 2: Lógica para mostrar reproductor de video o audio
+    # Lógica para mostrar reproductor de video o audio
     if archivo.name.endswith(".mp4"):
         st.video(archivo)
     else:
         st.audio(archivo)
     
     if st.button("🚀 INICIAR AUDITORÍA CLÍNICO-COMERCIAL"):
-        # MODIFICACIÓN 3: Nombre de archivo temporal dinámico según extensión
-        ext = archivo.name.split('.')[-1]
+        ext = archivo.name.split('.')[-1].lower()
         temp_file_name = f"temp_audit.{ext}"
 
         try:
@@ -99,14 +96,25 @@ if archivo:
                     f.write(archivo.getbuffer())
                 
                 status.write("Subiendo archivo a Google AI Studio...")
-                audio_file = genai.upload_file(path=temp_file_name)
+                
+                # Determinar el tipo MIME exacto para evitar el error FAILED
+                if ext == "mp4":
+                    tipo_mime = "video/mp4"
+                elif ext == "mp3":
+                    tipo_mime = "audio/mp3"
+                elif ext == "wav":
+                    tipo_mime = "audio/wav"
+                else:
+                    tipo_mime = None
+
+                audio_file = genai.upload_file(path=temp_file_name, mime_type=tipo_mime)
                 
                 while audio_file.state.name == "PROCESSING":
                     time.sleep(2)
                     audio_file = genai.get_file(audio_file.name)
                 
                 if audio_file.state.name == "FAILED":
-                    st.error("El procesamiento del archivo falló en los servidores de Google.")
+                    st.error("El procesamiento del archivo falló en los servidores de Google. Verifica que el archivo interno no esté dañado.")
                     st.stop()
                 
                 # Análisis con enfoque mixto (Psicología + Eficiencia)
