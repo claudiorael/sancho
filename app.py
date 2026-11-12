@@ -121,7 +121,7 @@ def crear_word(analisis_texto, nombre, tipo, fecha):
     return output.getvalue()
 
 # 3. INTERFAZ PRINCIPAL
-st.title("🧠 Sistema Sancho v2.1")
+st.title("🧠 Sistema Sancho v2.2")
 st.markdown("---")
 
 tab_analisis, tab_desencriptador, tab_entrenamiento = st.tabs([
@@ -140,7 +140,7 @@ with tab_analisis:
             "Enfoque de Análisis:", 
             ["Mixto (Original RRHH y Ventas)", "Clínico Estricto (Terapia)", "Comercial Estricto (Ventas)"]
         )
-        nombre_sujeto = st.text_input("Nombre del Paciente / Colaborador:")
+        nombre_sujeto = st.text_input("Nombre del Paciente / Ejecutivo:")
         clave_encriptacion = st.text_input("Crea una clave para encriptar este informe:", type="password")
         
         st.divider()
@@ -219,14 +219,15 @@ with tab_analisis:
                             5. **Plan de Acción**: 3 recomendaciones concretas para la próxima sesión.
                             """
                         else:
+                            # PROMPT ACTUALIZADO AL ROL DE COACH DE VENTAS
                             prompt = """
-                            Analiza esta llamada estrictamente bajo un enfoque de VENTAS Y CALIDAD:
-                            0. **Estados de Ánimo**: Incluye emojis que reflejen la disposición del Cliente y la energía/postura del Vendedor.
-                            1. **Transcripción**: Breve resumen del interés del cliente y producto abordado.
-                            2. **Score de Desempeño (0-100)**: Evalúa objetividad, uso de datos y cumplimiento de metas.
-                            3. **Análisis Comercial**: ¿Cómo fue la capacidad de persuasión y manejo de objeciones?
-                            4. **Criterio de Calidad**: ¿Cumplió con los hitos obligatorios del script?
-                            5. **Plan de Acción**: 3 recomendaciones concretas para coaching y mejora de cierre.
+                            Analiza esta llamada asumiendo el rol de un COACH DE VENTAS EXPERTO. No utilices jerga psicológica ni clínica. Tu enfoque es 100% comercial y orientado a la mejora continua del vendedor:
+                            0. **Estados de Ánimo**: Incluye emojis que reflejen la disposición del Cliente y la energía del Ejecutivo (basado estrictamente en su tono de voz y ritmo).
+                            1. **Contexto Comercial**: Breve resumen del objetivo de la llamada y producto abordado.
+                            2. **Detección de Quiebres**: Identifica los momentos exactos donde la venta se trabó, el cliente mostró resistencia o el ejecutivo perdió el control de la conversación.
+                            3. **Puntos de Mejora**: Crítica directa y constructiva sobre lo que el ejecutivo falló, omitió o manejó incorrectamente.
+                            4. **Score de Ejecución (0-100)**: Evalúa el cumplimiento del script, sondeo y técnicas de cierre.
+                            5. **Plan de Acción (Coaching)**: 3 tareas o directrices accionables que el ejecutivo debe aplicar en su próxima llamada.
                             """
                         
                         status.write("Redactando informe analítico...")
@@ -270,7 +271,6 @@ with tab_analisis:
                     use_container_width=True
                 )
             with col_d2:
-                # Botón para borrar el informe de la pantalla voluntariamente
                 if st.button("❌ Cerrar Informe", use_container_width=True):
                     st.session_state.informe_actual = None
                     st.session_state.word_encriptado = None
@@ -306,7 +306,8 @@ with tab_desencriptador:
 with tab_entrenamiento:
     st.header("Entrenamiento del Rol de Sancho")
     
-    estilo_actual = "Eres Sancho. Tu objetivo es analizar a las personas de forma clara, directa y estructurada. Si el contexto es clínico, integra conceptos psicoanalíticos (transferencia, mecanismos de defensa, contenido latente) y del constructivismo intersubjetivo explicando de forma sencilla cómo se observan en el comportamiento del paciente. Si el contexto es de ventas, enfócate estrictamente en la persuasión, manejo de objeciones y cumplimiento de protocolos."
+    # TEXTO DE ENTRENAMIENTO ACTUALIZADO A LOS DOS ROLES
+    estilo_actual = "Eres Sancho. Si evalúas el contexto Clínico (Terapia), integra conceptos psicoanalíticos y del constructivismo intersubjetivo explicando de forma sencilla cómo se observan en el comportamiento del paciente. Si evalúas el contexto Comercial (Ventas), asume el rol de un Coach Experto: elimina la terminología psicológica y enfócate en detectar quiebres en la conversación, leer los estados de ánimo por el tono de voz e identificar puntos de mejora claros y accionables para el ejecutivo."
     
     if os.path.exists("memoria_sancho.txt"):
         with open("memoria_sancho.txt", "r", encoding="utf-8") as f:
