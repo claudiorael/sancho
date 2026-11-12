@@ -4,20 +4,31 @@ import io
 import time
 import os
 import datetime
+import re
 from docx import Document
 from cryptography.fernet import Fernet
 import base64
 import hashlib
 
-# 1. CONFIGURACIÓN DE PÁGINA Y SEGURIDAD
+# 1. CONFIGURACIÓN DE PÁGINA Y ESTADO
 st.set_page_config(page_title="Sancho - Analizador de Personas", layout="wide", page_icon="🧠")
+
+# Inicializar variables de sesión para que el informe no desaparezca
+if "informe_actual" not in st.session_state:
+    st.session_state.informe_actual = None
+if "word_encriptado" not in st.session_state:
+    st.session_state.word_encriptado = None
+if "nombre_informe" not in st.session_state:
+    st.session_state.nombre_informe = None
+if "fecha_informe" not in st.session_state:
+    st.session_state.fecha_informe = None
 
 def check_password():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
     if not st.session_state.authenticated:
         st.title("🔐 Acceso al Sistema Sancho")
-        st.write("Bienvenido. Introduce tu credencial para acceder.")
+        st.write("Bienvenido, Claudio. Introduce tu credencial para acceder.")
         col1, col2 = st.columns([1, 2])
         with col1:
             pwd = st.text_input("Contraseña de Aplicación:", type="password")
@@ -73,23 +84,44 @@ def crear_word(analisis_texto, nombre, tipo, fecha):
     doc.add_paragraph(f"Fecha de Análisis: {fecha}")
     doc.add_paragraph(f"Generado por: Sistema Sancho IA\n")
     
+    # Procesamiento inteligente de Markdown para limpiar los asteriscos
     for linea in analisis_texto.split('\n'):
-        if linea.startswith('##'):
-            doc.add_heading(linea.replace('##', '').strip(), level=2)
-        elif linea.startswith('#'):
-            doc.add_heading(linea.replace('#', '').strip(), level=1)
-        elif linea.startswith('**') and linea.endswith('**'):
-            p = doc.add_paragraph()
-            p.add_run(linea.replace('**', '')).bold = True
-        elif linea.strip() != "":
-            doc.add_paragraph(linea)
+        linea = linea.strip()
+        if not linea:
+            continue
+            
+        if linea.startswith('### '):
+            doc.add_heading(linea.replace('### ', ''), level=3)
+        elif linea.startswith('## '):
+            doc.add_heading(linea.replace('## ', ''), level=2)
+        elif linea.startswith('# '):
+            doc.add_heading(linea.replace('# ', ''), level=1)
+        else:
+            # Detectar si es una viñeta
+            is_bullet = False
+            if linea.startswith('* ') or linea.startswith('- '):
+                linea = linea[2:]
+                is_bullet = True
+            
+            p = doc.add_paragraph(style='List Bullet' if is_bullet else 'Normal')
+            
+            # Expresión regular para encontrar textos entre **negritas**
+            partes = re.split(r'(\*\*.*?\*\*)', linea)
+            for parte in partes:
+                if parte.startswith('**') and parte.endswith('**'):
+                    texto_limpio = parte[2:-2].replace('*', '') # Remueve asteriscos internos
+                    p.add_run(texto_limpio).bold = True
+                else:
+                    texto_limpio = parte.replace('*', '') # Limpia cualquier asterisco suelto
+                    if texto_limpio.strip():
+                        p.add_run(texto_limpio)
             
     output = io.BytesIO()
     doc.save(output)
     return output.getvalue()
 
 # 3. INTERFAZ PRINCIPAL
-st.title("🧠 Sistema Sancho v2.0 (Cloud Secure)")
+st.title("🧠 Sistema Sancho v2.1")
 st.markdown("---")
 
 tab_analisis, tab_desencriptador, tab_entrenamiento = st.tabs([
@@ -104,8 +136,11 @@ with tab_analisis:
     
     with col1:
         st.subheader("Configuración")
-        tipo_analisis = st.radio("Enfoque de Análisis (Estricto):", ["Clínico (Terapia)", "Comercial (Venta)"])
-        nombre_sujeto = st.text_input("Nombre del Paciente / Cliente:")
+        tipo_analisis = st.radio(
+            "Enfoque de Análisis:", 
+            ["Mixto (Original RRHH y Ventas)", "Clínico Estricto (Terapia)", "Comercial Estricto (Ventas)"]
+        )
+        nombre_sujeto = st.text_input("Nombre del Paciente / Colaborador:")
         clave_encriptacion = st.text_input("Crea una clave para encriptar este informe:", type="password")
         
         st.divider()
@@ -152,34 +187,46 @@ with tab_analisis:
                             st.error("Error en el archivo. El formato interno es incompatible o está dañado.")
                             st.stop()
                         
-                        # Leer instrucciones de entrenamiento
                         instrucciones_sistema = "Eres un asistente experto."
                         if os.path.exists("memoria_sancho.txt"):
                             with open("memoria_sancho.txt", "r", encoding="utf-8") as file:
                                 instrucciones_sistema = file.read()
                         
-                        # Temperatura 0.0 para conclusiones deterministas y lógicas
                         model = genai.GenerativeModel(
                             nombre_modelo, 
                             system_instruction=instrucciones_sistema,
                             generation_config={"temperature": 0.0} 
                         )
                         
-                        if tipo_analisis == "Clínico (Terapia)":
+                        if tipo_analisis == "Mixto (Original RRHH y Ventas)":
                             prompt = """
-                            Analiza esta sesión bajo un enfoque de PSICOLOGÍA CLÍNICA, integrando una mirada psicoanalítica y constructivista intersubjetiva. Usa un lenguaje analítico accesible, transversal y profundo, aplicando términos psicoanalíticos clásicos de forma clara.
-                            1. **Síntesis del Relato (Contenido Manifiesto)**: Resumen del motivo de consulta y lo relatado conscientemente por el paciente.
-                            2. **Análisis Psicoanalítico e Intersubjetivo (Contenido Latente)**: Identifica mecanismos de defensa, posición subjetiva frente al conflicto, angustia subyacente y aquello que se está actuando o repitiendo. 
-                            3. **Dinámica Transferencial**: ¿Cómo se posiciona el paciente en el vínculo terapéutico? ¿Existen demandas encubiertas hacia el analista?
-                            4. **Apreciación y Plan de Tratamiento**: Recomendaciones clínicas estructuradas para el manejo de la sesión y el encuadre futuro.
+                            Analiza esta llamada con una mirada de Psicólogo de RRHH y Experto en Ventas:
+                            0. **Estados de Ánimo**: Incluye 2 emojis precisos que resuman la actitud/emoción del Evaluador/Vendedor y del Cliente/Paciente.
+                            1. **Transcripción**: Breve resumen de lo hablado.
+                            2. **Score de Desempeño (0-100)**: Evalúa objetividad y datos.
+                            3. **Análisis Psicológico**: ¿Cómo fue la transferencia? ¿Hubo empatía real o mecánica? 
+                            4. **Criterio de Calidad**: ¿Cumplió con los hitos obligatorios del script?
+                            5. **Plan de Acción**: 3 recomendaciones concretas para coaching.
+                            """
+                        elif tipo_analisis == "Clínico Estricto (Terapia)":
+                            prompt = """
+                            Analiza esta sesión bajo un enfoque de PSICOLOGÍA CLÍNICA (Constructivismo Intersubjetivo y Psicoanálisis):
+                            0. **Estados de Ánimo**: Incluye emojis que representen el estado emocional del Paciente y la disposición analítica del Terapeuta.
+                            1. **Transcripción**: Breve síntesis del relato manifiesto y motivo de consulta.
+                            2. **Score de Alianza (0-100)**: Evalúa la calidad del vínculo terapéutico.
+                            3. **Análisis Psicológico**: ¿Cómo fue la dinámica transferencial? Identifica mecanismos de defensa y contenido latente con lenguaje accesible.
+                            4. **Criterio Clínico**: ¿Se mantuvo el encuadre, la escucha activa y la contención?
+                            5. **Plan de Acción**: 3 recomendaciones concretas para la próxima sesión.
                             """
                         else:
                             prompt = """
-                            Analiza esta llamada estrictamente bajo un enfoque de VENTAS Y CALIDAD.
-                            1. **Resumen Comercial**: Interés del cliente y producto ofrecido.
-                            2. **Score de Calidad (0-100)**: Evaluación del cumplimiento del script.
-                            3. **Manejo de Objeciones**: ¿Cómo resolvió las negativas?
-                            4. **Oportunidad de Mejora**: Feedback directo y estructurado.
+                            Analiza esta llamada estrictamente bajo un enfoque de VENTAS Y CALIDAD:
+                            0. **Estados de Ánimo**: Incluye emojis que reflejen la disposición del Cliente y la energía/postura del Vendedor.
+                            1. **Transcripción**: Breve resumen del interés del cliente y producto abordado.
+                            2. **Score de Desempeño (0-100)**: Evalúa objetividad, uso de datos y cumplimiento de metas.
+                            3. **Análisis Comercial**: ¿Cómo fue la capacidad de persuasión y manejo de objeciones?
+                            4. **Criterio de Calidad**: ¿Cumplió con los hitos obligatorios del script?
+                            5. **Plan de Acción**: 3 recomendaciones concretas para coaching y mejora de cierre.
                             """
                         
                         status.write("Redactando informe analítico...")
@@ -189,21 +236,15 @@ with tab_analisis:
                         fecha_str = datetime.date.today().strftime("%Y-%m-%d")
                         word_bytes = crear_word(response.text, nombre_sujeto, tipo_analisis, fecha_str)
                         word_encriptado = encriptar_archivo(word_bytes, clave_encriptacion)
+                        
+                        # GUARDAR EN VARIABLES DE SESIÓN PARA QUE NO DESAPAREZCA
+                        st.session_state.informe_actual = response.text
+                        st.session_state.word_encriptado = word_encriptado
+                        st.session_state.nombre_informe = nombre_sujeto
+                        st.session_state.fecha_informe = fecha_str
                             
                         status.update(label="Análisis Finalizado", state="complete")
 
-                    st.subheader(f"📊 Reporte: {nombre_sujeto}")
-                    st.markdown(response.text)
-                    
-                    st.success("✅ Informe generado. Descarga tu archivo encriptado para guardarlo de forma segura en tu computador.")
-                    st.download_button(
-                        label="🔒 Descargar Informe Encriptado (.enc)",
-                        data=word_encriptado,
-                        file_name=f"{fecha_str}_{nombre_sujeto}_Seguro.enc",
-                        mime="application/octet-stream"
-                    )
-
-                    # Limpieza final
                     genai.delete_file(audio_file.name)
                     if os.path.exists(temp_file_name): os.remove(temp_file_name)
 
@@ -212,6 +253,30 @@ with tab_analisis:
                     if os.path.exists(temp_file_name): os.remove(temp_file_name)
         elif archivo:
             st.warning("⚠️ Ingresa el Nombre y crea una Clave de Encriptación antes de iniciar.")
+            
+        # MOSTRAR EL INFORME MIENTRAS ESTÉ EN MEMORIA DE SESIÓN
+        if st.session_state.informe_actual:
+            st.markdown("---")
+            st.subheader(f"📊 Reporte: {st.session_state.nombre_informe}")
+            st.markdown(st.session_state.informe_actual)
+            
+            col_d1, col_d2 = st.columns([1, 1])
+            with col_d1:
+                st.download_button(
+                    label="🔒 Descargar Informe Encriptado (.enc)",
+                    data=st.session_state.word_encriptado,
+                    file_name=f"{st.session_state.fecha_informe}_{st.session_state.nombre_informe}_Seguro.enc",
+                    mime="application/octet-stream",
+                    use_container_width=True
+                )
+            with col_d2:
+                # Botón para borrar el informe de la pantalla voluntariamente
+                if st.button("❌ Cerrar Informe", use_container_width=True):
+                    st.session_state.informe_actual = None
+                    st.session_state.word_encriptado = None
+                    st.session_state.nombre_informe = None
+                    st.session_state.fecha_informe = None
+                    st.rerun()
 
 # --- PESTAÑA 2: DESENCRIPTADOR ---
 with tab_desencriptador:
@@ -240,15 +305,14 @@ with tab_desencriptador:
 # --- PESTAÑA 3: ENTRENAMIENTO ---
 with tab_entrenamiento:
     st.header("Entrenamiento del Rol de Sancho")
-    st.info("Para que este entrenamiento sea **permanente** en la nube, crea un archivo llamado `memoria_sancho.txt` en tu repositorio de GitHub y escribe las instrucciones ahí.")
     
-    estilo_actual = "Eres Sancho, un psicólogo clínico experto. Tu análisis clínico integra la profundidad del psicoanálisis con la co-construcción del constructivismo intersubjetivo. Utilizas un lenguaje analítico transversal y accesible, incorporando términos psicoanalíticos clásicos (como transferencia, mecanismos de defensa, represión, goce o contenido latente) de manera clara, explicándolos a través de los sucesos del relato del paciente. Prestas especial atención al discurso inconsciente y la posición subjetiva del paciente, evaluando siempre cómo el conflicto se despliega en el vínculo."
+    estilo_actual = "Eres Sancho. Tu objetivo es analizar a las personas de forma clara, directa y estructurada. Si el contexto es clínico, integra conceptos psicoanalíticos (transferencia, mecanismos de defensa, contenido latente) y del constructivismo intersubjetivo explicando de forma sencilla cómo se observan en el comportamiento del paciente. Si el contexto es de ventas, enfócate estrictamente en la persuasión, manejo de objeciones y cumplimiento de protocolos."
     
     if os.path.exists("memoria_sancho.txt"):
         with open("memoria_sancho.txt", "r", encoding="utf-8") as f:
             estilo_actual = f.read()
             
-    nuevo_estilo = st.text_area("Define la personalidad y reglas:", value=estilo_actual, height=250)
+    nuevo_estilo = st.text_area("Define la personalidad y reglas:", value=estilo_actual, height=200)
     
     if st.button("Probar Aprendizaje (Temporal)"):
         with open("memoria_sancho.txt", "w", encoding="utf-8") as f:
