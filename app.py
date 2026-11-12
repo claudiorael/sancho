@@ -15,7 +15,7 @@ def check_password():
 
     if not st.session_state.authenticated:
         st.title("🔐 Acceso al Sistema Sancho")
-        st.write("Bienvenido, Claudio. Introduce tu credencial para acceder al analizador.")
+        st.write("Bienvenido. Introduce tu credencial para acceder al analizador.")
         
         col1, col2 = st.columns([1, 2])
         with col1:
@@ -29,7 +29,6 @@ def check_password():
         return False
     return True
 
-# Si no pasa la contraseña, el código se detiene aquí
 if not check_password():
     st.stop()
 
@@ -41,7 +40,7 @@ else:
     st.stop()
 
 def buscar_modelo_activo():
-    """Detecta dinámicamente el modelo para evitar el error 404 y captura errores reales."""
+    """Detecta dinámicamente el modelo para evitar el error 404."""
     try:
         modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         for m in modelos:
@@ -59,7 +58,11 @@ st.markdown("---")
 
 with st.sidebar:
     st.header("📂 Carga de Evidencia")
-    archivo = st.file_uploader("Subir grabación de llamada (MP3/WAV/MP4)", type=["mp3", "wav", "mp4"])
+    # Ampliados los formatos telefónicos comunes
+    archivo = st.file_uploader(
+        "Subir grabación (MP3/WAV/MP4/M4A/OGG)", 
+        type=["mp3", "wav", "mp4", "m4a", "ogg"]
+    )
     
     st.divider()
     if st.button("🗑️ Limpiar Nube"):
@@ -71,11 +74,8 @@ with st.sidebar:
             st.error(f"Error al limpiar la nube: {e}")
 
 if archivo:
-    # Lógica para mostrar reproductor de video o audio
-    if archivo.name.endswith(".mp4"):
-        st.video(archivo)
-    else:
-        st.audio(archivo)
+    # Mostrar el reproductor de audio universal (Streamlit procesa el audio MP4 internamente)
+    st.audio(archivo)
     
     if st.button("🚀 INICIAR AUDITORÍA CLÍNICO-COMERCIAL"):
         ext = archivo.name.split('.')[-1].lower()
@@ -83,23 +83,25 @@ if archivo:
 
         try:
             with st.status("Procesando información...", expanded=True) as status:
-                # Detectar Motor
                 nombre_modelo = buscar_modelo_activo()
                 if not nombre_modelo:
-                    st.error("No se detectaron modelos activos. Revisa el error de conexión arriba.")
+                    st.error("No se detectaron modelos activos.")
                     st.stop()
                 
                 status.write(f"Motor activo: {nombre_modelo}")
                 
-                # Guardar archivo local para subirlo con el nombre dinámico
                 with open(temp_file_name, "wb") as f:
                     f.write(archivo.getbuffer())
                 
                 status.write("Subiendo archivo a Google AI Studio...")
                 
-                # Determinar el tipo MIME exacto para evitar el error FAILED
+                # Asignación correcta de tipo MIME para evitar el fallo de "video sin imagen"
                 if ext == "mp4":
-                    tipo_mime = "video/mp4"
+                    tipo_mime = "audio/mp4" # Obliga a Gemini a tratarlo solo como voz
+                elif ext in ["m4a", "aac"]:
+                    tipo_mime = "audio/aac"
+                elif ext == "ogg":
+                    tipo_mime = "audio/ogg"
                 elif ext == "mp3":
                     tipo_mime = "audio/mp3"
                 elif ext == "wav":
@@ -114,10 +116,9 @@ if archivo:
                     audio_file = genai.get_file(audio_file.name)
                 
                 if audio_file.state.name == "FAILED":
-                    st.error("El procesamiento del archivo falló en los servidores de Google. Verifica que el archivo interno no esté dañado.")
+                    st.error("El procesamiento falló. Verifica que el archivo interno no esté dañado.")
                     st.stop()
                 
-                # Análisis con enfoque mixto (Psicología + Eficiencia)
                 status.write("Generando análisis semántico y métricas...")
                 model = genai.GenerativeModel(nombre_modelo)
                 
@@ -134,11 +135,9 @@ if archivo:
                 
                 status.update(label="Análisis Finalizado", state="complete")
 
-            # Muestra de Resultados
             st.subheader("📊 Reporte de Auditoría")
             st.markdown(response.text)
 
-            # Generar Excel para descarga
             df = pd.DataFrame({
                 "Fecha": [pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")],
                 "Colaborador": ["Evaluación Automática"],
@@ -156,15 +155,13 @@ if archivo:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            # Limpieza final
             genai.delete_file(audio_file.name)
             if os.path.exists(temp_file_name):
                 os.remove(temp_file_name)
 
         except Exception as e:
             st.error(f"Error en el proceso: {e}")
-            # Intento de limpieza en caso de error
             if os.path.exists(temp_file_name):
                 os.remove(temp_file_name)
 else:
-    st.info("Sube una llamada (audio o video) para empezar el cruce de datos y psicología.")
+    st.info("Sube una llamada para empezar el cruce de datos y psicología.")
