@@ -149,7 +149,7 @@ with tab_analisis:
                             audio_file = genai.get_file(audio_file.name)
                         
                         if audio_file.state.name == "FAILED":
-                            st.error("Error en el archivo.")
+                            st.error("Error en el archivo. El formato interno es incompatible o está dañado.")
                             st.stop()
                         
                         # Leer instrucciones de entrenamiento
@@ -167,11 +167,11 @@ with tab_analisis:
                         
                         if tipo_analisis == "Clínico (Terapia)":
                             prompt = """
-                            Analiza esta sesión bajo un enfoque de PSICOLOGÍA CLÍNICA, integrando una mirada psicoanalítica y constructivista intersubjetiva.
-                            1. **Síntesis del Relato (Contenido Manifiesto)**: Resumen del motivo de consulta y lo relatado conscientemente.
-                            2. **Análisis Psicoanalítico (Contenido Latente)**: Identifica posibles mecanismos de defensa, posición subjetiva frente al conflicto, angustia subyacente y lo que se está actuando o repitiendo.
-                            3. **Dinámica Transferencial**: ¿Cómo se posiciona el paciente en el vínculo terapéutico? ¿Existen demandas encubiertas?
-                            4. **Apreciación y Plan de Tratamiento**: Recomendaciones clínicas para el manejo de la sesión y el encuadre futuro.
+                            Analiza esta sesión bajo un enfoque de PSICOLOGÍA CLÍNICA, integrando una mirada psicoanalítica y constructivista intersubjetiva. Usa un lenguaje analítico accesible, transversal y profundo, aplicando términos psicoanalíticos clásicos de forma clara.
+                            1. **Síntesis del Relato (Contenido Manifiesto)**: Resumen del motivo de consulta y lo relatado conscientemente por el paciente.
+                            2. **Análisis Psicoanalítico e Intersubjetivo (Contenido Latente)**: Identifica mecanismos de defensa, posición subjetiva frente al conflicto, angustia subyacente y aquello que se está actuando o repitiendo. 
+                            3. **Dinámica Transferencial**: ¿Cómo se posiciona el paciente en el vínculo terapéutico? ¿Existen demandas encubiertas hacia el analista?
+                            4. **Apreciación y Plan de Tratamiento**: Recomendaciones clínicas estructuradas para el manejo de la sesión y el encuadre futuro.
                             """
                         else:
                             prompt = """
@@ -179,7 +179,7 @@ with tab_analisis:
                             1. **Resumen Comercial**: Interés del cliente y producto ofrecido.
                             2. **Score de Calidad (0-100)**: Evaluación del cumplimiento del script.
                             3. **Manejo de Objeciones**: ¿Cómo resolvió las negativas?
-                            4. **Oportunidad de Mejora**: Feedback directo.
+                            4. **Oportunidad de Mejora**: Feedback directo y estructurado.
                             """
                         
                         status.write("Redactando informe analítico...")
@@ -203,7 +203,7 @@ with tab_analisis:
                         mime="application/octet-stream"
                     )
 
-                    # Limpieza
+                    # Limpieza final
                     genai.delete_file(audio_file.name)
                     if os.path.exists(temp_file_name): os.remove(temp_file_name)
 
@@ -242,12 +242,15 @@ with tab_entrenamiento:
     st.header("Entrenamiento del Rol de Sancho")
     st.info("Para que este entrenamiento sea **permanente** en la nube, crea un archivo llamado `memoria_sancho.txt` en tu repositorio de GitHub y escribe las instrucciones ahí.")
     
-    estilo_actual = "Eres Sancho, un psicólogo clínico experto. Tu análisis clínico integra la profundidad del psicoanálisis con la co-construcción del constructivismo intersubjetivo. Prestas especial atención al contenido latente, el discurso inconsciente, los mecanismos de defensa, la dinámica transferencial y la posición subjetiva del paciente, evaluando siempre cómo el conflicto se despliega en el vínculo."
+    estilo_actual = "Eres Sancho, un psicólogo clínico experto. Tu análisis clínico integra la profundidad del psicoanálisis con la co-construcción del constructivismo intersubjetivo. Utilizas un lenguaje analítico transversal y accesible, incorporando términos psicoanalíticos clásicos (como transferencia, mecanismos de defensa, represión, goce o contenido latente) de manera clara, explicándolos a través de los sucesos del relato del paciente. Prestas especial atención al discurso inconsciente y la posición subjetiva del paciente, evaluando siempre cómo el conflicto se despliega en el vínculo."
     
     if os.path.exists("memoria_sancho.txt"):
         with open("memoria_sancho.txt", "r", encoding="utf-8") as f:
             estilo_actual = f.read()
             
-    nuevo_estilo = st.text_area("Define la personalidad y reglas:", value=estilo_actual, height=200)
+    nuevo_estilo = st.text_area("Define la personalidad y reglas:", value=estilo_actual, height=250)
     
     if st.button("Probar Aprendizaje (Temporal)"):
+        with open("memoria_sancho.txt", "w", encoding="utf-8") as f:
+            f.write(nuevo_estilo)
+        st.success("Sancho usará este enfoque temporalmente.")
