@@ -60,7 +60,8 @@ st.markdown("---")
 
 with st.sidebar:
     st.header("📂 Carga de Evidencia")
-    archivo = st.file_uploader("Subir grabación de llamada (MP3/WAV)", type=["mp3", "wav"])
+    # MODIFICACIÓN 1: Se agregó "mp4" a los tipos permitidos
+    archivo = st.file_uploader("Subir grabación de llamada (MP3/WAV/MP4)", type=["mp3", "wav", "mp4"])
     
     st.divider()
     if st.button("🗑️ Limpiar Nube"):
@@ -72,9 +73,17 @@ with st.sidebar:
             st.error(f"Error al limpiar la nube: {e}")
 
 if archivo:
-    st.audio(archivo)
+    # MODIFICACIÓN 2: Lógica para mostrar reproductor de video o audio
+    if archivo.name.endswith(".mp4"):
+        st.video(archivo)
+    else:
+        st.audio(archivo)
     
     if st.button("🚀 INICIAR AUDITORÍA CLÍNICO-COMERCIAL"):
+        # MODIFICACIÓN 3: Nombre de archivo temporal dinámico según extensión
+        ext = archivo.name.split('.')[-1]
+        temp_file_name = f"temp_audit.{ext}"
+
         try:
             with st.status("Procesando información...", expanded=True) as status:
                 # Detectar Motor
@@ -85,19 +94,19 @@ if archivo:
                 
                 status.write(f"Motor activo: {nombre_modelo}")
                 
-                # Guardar archivo local para subirlo
-                with open("temp_audit.mp3", "wb") as f:
+                # Guardar archivo local para subirlo con el nombre dinámico
+                with open(temp_file_name, "wb") as f:
                     f.write(archivo.getbuffer())
                 
-                status.write("Subiendo audio a Google AI Studio...")
-                audio_file = genai.upload_file(path="temp_audit.mp3")
+                status.write("Subiendo archivo a Google AI Studio...")
+                audio_file = genai.upload_file(path=temp_file_name)
                 
                 while audio_file.state.name == "PROCESSING":
                     time.sleep(2)
                     audio_file = genai.get_file(audio_file.name)
                 
                 if audio_file.state.name == "FAILED":
-                    st.error("El procesamiento del audio falló en los servidores de Google.")
+                    st.error("El procesamiento del archivo falló en los servidores de Google.")
                     st.stop()
                 
                 # Análisis con enfoque mixto (Psicología + Eficiencia)
@@ -141,13 +150,13 @@ if archivo:
 
             # Limpieza final
             genai.delete_file(audio_file.name)
-            if os.path.exists("temp_audit.mp3"):
-                os.remove("temp_audit.mp3")
+            if os.path.exists(temp_file_name):
+                os.remove(temp_file_name)
 
         except Exception as e:
             st.error(f"Error en el proceso: {e}")
             # Intento de limpieza en caso de error
-            if os.path.exists("temp_audit.mp3"):
-                os.remove("temp_audit.mp3")
+            if os.path.exists(temp_file_name):
+                os.remove(temp_file_name)
 else:
-    st.info("Sube una llamada para empezar el cruce de datos y psicología.")
+    st.info("Sube una llamada (audio o video) para empezar el cruce de datos y psicología.")
